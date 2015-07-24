@@ -5,9 +5,11 @@ import (
 	"flag"
 	"fmt"
 	r "github.com/dancannon/gorethink"
+	"github.com/jeffail/tunny"
 	"io"
 	"log"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -77,7 +79,7 @@ func (bmo *BMO) Compute(input *os.File) {
 		Database:      bmo.database,
 		DiscoverHosts: true,
 	})
-  session.SetMaxOpenConns(50)
+	session.SetMaxOpenConns(50)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -103,26 +105,10 @@ func (bmo *BMO) Compute(input *os.File) {
 
 	// deliver the messages
 	decoder := json.NewDecoder(input)
+  m := &Message{}
 
-  c := make(chan Message, BUFFER_SIZE)
-  d := make(chan bool, 1)
-	m := &Message{}
-
-  go func(){
-    for {
-      select {
-      case msg := <-c:
-        _, err = r.Table(bmo.table).Insert(msg).RunWrite(session)
-        if err != nil {
-          log.Fatal(err)
-          os.Exit(1)
-        }
-      case <-d:
-        return
-      default:
-      }
-    }
-  }()
+	pool, _ := tunny.CreatePoolGeneric(20).Open()
+  defer pool.Close()
 
 	for {
 		err = decoder.Decode(&m.Obj)
@@ -131,19 +117,28 @@ func (bmo *BMO) Compute(input *os.File) {
 
 		switch {
 		case err == io.EOF:
-      d <- true
 			return
 		case err != nil:
 			log.Fatal("Can't parse json input, \"", err, "\". Object #", bmo.seq, ", after ", m.Obj)
 			os.Exit(1)
 		}
 
-    c <- *m
+		pool.SendWork(func() {
+			_, err = r.Table(bmo.table).Insert(m).RunWrite(session)
+			if err != nil {
+				log.Fatal(err)
+				os.Exit(1)
+			}
+  	})
+
 		bmo.seq += 1
 	}
 }
 
 func main() {
+
+	numCPUs := runtime.NumCPU()
+	runtime.GOMAXPROCS(numCPUs)
 
 	table := flag.String("table", "bmo_test", "Name of target table")
 	address := flag.String("address", "127.0.0.1", "RethinkDB host[:port]")
