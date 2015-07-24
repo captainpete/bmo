@@ -40,6 +40,8 @@ const BMO_ART = `
         ██            ██
        ▐██            ██▌`
 
+const BUFFER_SIZE = 200 // number of messages to remember at once
+
 type BMO struct {
 	address  string
 	database string
@@ -101,7 +103,27 @@ func (bmo *BMO) Compute(input *os.File) {
 
 	// deliver the messages
 	decoder := json.NewDecoder(input)
+
+  c := make(chan Message, BUFFER_SIZE)
+  d := make(chan bool, 1)
 	m := &Message{}
+
+  go func(){
+    for {
+      select {
+      case msg := <-c:
+        _, err = r.Table(bmo.table).Insert(msg).RunWrite(session)
+        if err != nil {
+          log.Fatal(err)
+          os.Exit(1)
+        }
+      case <-d:
+        return
+      default:
+      }
+    }
+  }()
+
 	for {
 		err = decoder.Decode(&m.Obj)
 		m.Time = time.Now().UnixNano() / 1000000 // ms
@@ -109,20 +131,14 @@ func (bmo *BMO) Compute(input *os.File) {
 
 		switch {
 		case err == io.EOF:
+      d <- true
 			return
 		case err != nil:
 			log.Fatal("Can't parse json input, \"", err, "\". Object #", bmo.seq, ", after ", m.Obj)
 			os.Exit(1)
 		}
 
-    go func(){
-      _, err = r.Table(bmo.table).Insert(m).RunWrite(session)
-      if err != nil {
-        log.Fatal(err)
-        os.Exit(1)
-      }
-    }()
-
+    c <- *m
 		bmo.seq += 1
 	}
 }
