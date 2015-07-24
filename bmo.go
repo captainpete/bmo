@@ -42,7 +42,6 @@ const BMO_ART = `
         ██            ██
        ▐██            ██▌`
 
-const BUFFER_SIZE = 200 // number of messages to remember at once
 
 type BMO struct {
 	address  string
