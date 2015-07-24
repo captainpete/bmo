@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"runtime"
 	"time"
 )
 
@@ -42,7 +41,7 @@ const BMO_ART = `
         ██            ██
        ▐██            ██▌`
 
-const POOL_SIZE = 200
+const POOL_SIZE = 20
 
 type BMO struct {
 	address  string
@@ -136,8 +135,6 @@ func (bmo *BMO) Compute(input *os.File) {
 }
 
 func main() {
-
-	runtime.GOMAXPROCS(POOL_SIZE)
 
 	table := flag.String("table", "bmo_test", "Name of target table")
 	address := flag.String("address", "127.0.0.1", "RethinkDB host[:port]")
