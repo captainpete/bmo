@@ -43,6 +43,10 @@ const BMO_ART = `
 
 const POOL_SIZE = 20
 
+// http://www.rethinkdb.com/docs/troubleshooting/
+// "RethinkDB operates at peak performance when the batch size is around two hundred documents."
+const INSERT_BATCH_SIZE = 200
+
 type BMO struct {
 	address  string
 	database string
@@ -104,31 +108,49 @@ func (bmo *BMO) Compute(input *os.File) {
 
 	// deliver the messages
 	decoder := json.NewDecoder(input)
-	m := &Message{}
+	ms := make([]Message, INSERT_BATCH_SIZE)
+	var m *Message
+	var i uint64
+	var ignoreLast bool
 
 	pool, _ := tunny.CreatePoolGeneric(POOL_SIZE).Open()
 	defer pool.Close()
 
+	insert := func() {
+		j := i
+		if !ignoreLast {
+			j += 1
+		}
+		_, err = r.Table(bmo.table).Insert(ms[:j]).RunWrite(session)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
+	}
+
 	for {
+		i = bmo.seq % INSERT_BATCH_SIZE
+		m = &ms[i]
 		err = decoder.Decode(&m.Obj)
 		m.Time = time.Now().UnixNano() / 1000000 // ms
 		m.Seq = bmo.seq
 
 		switch {
 		case err == io.EOF:
+			ignoreLast = true
+			pool.SendWork(insert)
 			return
 		case err != nil:
+			ignoreLast = true
+			pool.SendWork(insert)
 			log.Fatal("Can't parse json input, \"", err, "\". Object #", bmo.seq, ", after ", m.Obj)
 			os.Exit(1)
-		}
-
-		pool.SendWork(func() {
-			_, err = r.Table(bmo.table).Insert(m).RunWrite(session)
-			if err != nil {
-				log.Fatal(err)
-				os.Exit(1)
+		default:
+			if i+1 == INSERT_BATCH_SIZE {
+				ignoreLast = false
+				pool.SendWork(insert)
 			}
-		})
+		}
 
 		bmo.seq += 1
 	}
