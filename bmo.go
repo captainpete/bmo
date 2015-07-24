@@ -42,6 +42,7 @@ const BMO_ART = `
         ██            ██
        ▐██            ██▌`
 
+const POOL_SIZE = 200
 
 type BMO struct {
 	address  string
@@ -78,7 +79,7 @@ func (bmo *BMO) Compute(input *os.File) {
 		Database:      bmo.database,
 		DiscoverHosts: true,
 	})
-	session.SetMaxOpenConns(50)
+	session.SetMaxOpenConns(POOL_SIZE)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -104,10 +105,10 @@ func (bmo *BMO) Compute(input *os.File) {
 
 	// deliver the messages
 	decoder := json.NewDecoder(input)
-  m := &Message{}
+	m := &Message{}
 
-	pool, _ := tunny.CreatePoolGeneric(20).Open()
-  defer pool.Close()
+	pool, _ := tunny.CreatePoolGeneric(POOL_SIZE).Open()
+	defer pool.Close()
 
 	for {
 		err = decoder.Decode(&m.Obj)
@@ -128,7 +129,7 @@ func (bmo *BMO) Compute(input *os.File) {
 				log.Fatal(err)
 				os.Exit(1)
 			}
-  	})
+		})
 
 		bmo.seq += 1
 	}
@@ -136,8 +137,7 @@ func (bmo *BMO) Compute(input *os.File) {
 
 func main() {
 
-	numCPUs := runtime.NumCPU()
-	runtime.GOMAXPROCS(numCPUs)
+	runtime.GOMAXPROCS(POOL_SIZE)
 
 	table := flag.String("table", "bmo_test", "Name of target table")
 	address := flag.String("address", "127.0.0.1", "RethinkDB host[:port]")
