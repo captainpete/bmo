@@ -4,4 +4,5 @@ BMO takes JSON objects through standard input and uploads them to a specified ta
 
 Example usage:
 
-`some_script | bmo -node localhost -database sophia -table bmo_test`
+`some_script | bmo -node="localhost" -database="sophia" -table="bmo_test"`
+
