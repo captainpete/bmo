@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -48,15 +49,15 @@ const POOL_SIZE = 20
 const INSERT_BATCH_SIZE = 200
 
 type BMO struct {
-	address  string
+	nodes    NodeList
 	database string
 	table    string
 	seq      uint64
 }
 
-func NewBMO(address string, database string, table string) *BMO {
+func NewBMO(nodes NodeList, database string, table string) *BMO {
 	bmo := &BMO{
-		address:  address,
+		nodes:    nodes,
 		database: database,
 		table:    table,
 		seq:      0,
@@ -78,7 +79,7 @@ func (bmo *BMO) Compute(input *os.File) {
 
 	// set up database connection pool
 	session, err = r.Connect(r.ConnectOpts{
-		Address:       bmo.address,
+		Addresses:     bmo.nodes,
 		Database:      bmo.database,
 		DiscoverHosts: true,
 	})
@@ -156,11 +157,23 @@ func (bmo *BMO) Compute(input *os.File) {
 	}
 }
 
+type NodeList []string
+
+func (list *NodeList) String() string {
+	return strings.Join(*list, ", ")
+}
+
+func (list *NodeList) Set(node string) error {
+	*list = append(*list, node)
+	return nil
+}
+
 func main() {
 
-	table := flag.String("table", "bmo_test", "Name of target table")
-	address := flag.String("address", "127.0.0.1", "RethinkDB host[:port]")
+	var nodes NodeList
+	flag.Var(&nodes, "node", "RethinkDB host[:port], can specify multiple times")
 	database := flag.String("database", "sophia", "Name of target database")
+	table := flag.String("table", "bmo_test", "Name of target table")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s\n\nUsage of %s:\n", BMO_ART, os.Args[0])
@@ -169,7 +182,12 @@ func main() {
 
 	flag.Parse()
 
-	bmo := NewBMO(*address, *database, *table)
+	if len(nodes) == 0 {
+		log.Fatalln("Specify at least one node address")
+		flag.Usage()
+		os.Exit(2)
+	}
+	bmo := NewBMO(nodes, *database, *table)
 	bmo.Compute(os.Stdin)
 
 }
