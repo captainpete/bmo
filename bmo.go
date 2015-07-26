@@ -102,7 +102,7 @@ func (bmo *BMO) Compute(input *os.File) {
 		log.Println("Creating table ", bmo.table)
 		_, err = r.DB(bmo.database).TableCreate(bmo.table).RunWrite(session)
 		if err != nil {
-			log.Fatal("Error creating table: ", err)
+			log.Fatalln("Error creating table: ", err)
 			os.Exit(1)
 		}
 	}
