@@ -117,12 +117,15 @@ func (bmo *BMO) Compute(input *os.File) {
 	pool, _ := tunny.CreatePoolGeneric(POOL_SIZE).Open()
 	defer pool.Close()
 
+	table := r.Table(bmo.table)
+	insertOptions := r.InsertOpts{Durability: "soft"}
+
 	insert := func() {
 		j := i
 		if !ignoreLast {
 			j += 1
 		}
-		_, err = r.Table(bmo.table).Insert(ms[:j]).RunWrite(session)
+		_, err = table.Insert(ms[:j], insertOptions).RunWrite(session)
 		if err != nil {
 			log.Fatal(err)
 			os.Exit(1)
