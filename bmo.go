@@ -187,6 +187,17 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
+	if *database == "" {
+		log.Fatalln("Specify the database")
+		flag.Usage()
+		os.Exit(2)
+	}
+	if *table == "" {
+		log.Fatalln("Specify the target table")
+		flag.Usage()
+		os.Exit(2)
+	}
+
 	bmo := NewBMO(nodes, *database, *table)
 	bmo.Compute(os.Stdin)
 
