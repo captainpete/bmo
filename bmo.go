@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -172,6 +173,8 @@ func (list *NodeList) Set(node string) error {
 }
 
 func main() {
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	var nodes NodeList
 	flag.Var(&nodes, "node", "RethinkDB host[:port], can specify multiple times")
