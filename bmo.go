@@ -11,7 +11,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"time"
 )
 
 const BMO_ART = `
@@ -66,11 +65,7 @@ func NewBMO(nodes NodeList, database string, table string) *BMO {
 	return bmo
 }
 
-type Message struct {
-	Time int64       `gorethink:"t"`
-	Seq  uint64      `gorethink:"i"`
-	Obj  interface{} `gorethink:"o"`
-}
+type Message interface{}
 
 func (bmo *BMO) Compute(input *os.File) {
 
@@ -136,9 +131,7 @@ func (bmo *BMO) Compute(input *os.File) {
 	for {
 		i = bmo.seq % INSERT_BATCH_SIZE
 		m = &ms[i]
-		err = decoder.Decode(&m.Obj)
-		m.Time = time.Now().UnixNano() / 1000000 // ms
-		m.Seq = bmo.seq
+		err = decoder.Decode(&m)
 
 		switch {
 		case err == io.EOF:
@@ -148,7 +141,7 @@ func (bmo *BMO) Compute(input *os.File) {
 		case err != nil:
 			ignoreLast = true
 			pool.SendWork(insert)
-			log.Fatal("Can't parse json input, \"", err, "\". Object #", bmo.seq, ", after ", m.Obj)
+			log.Fatal("Can't parse json input, \"", err, "\". Object #", bmo.seq, ", after ", m)
 			os.Exit(1)
 		default:
 			if i+1 == INSERT_BATCH_SIZE {
