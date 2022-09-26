@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	r "github.com/dancannon/gorethink"
-	"github.com/jeffail/tunny"
+	"github.com/Jeffail/tunny"
 	"io"
 	"log"
 	"os"
@@ -108,45 +108,40 @@ func (bmo *BMO) Compute(input *os.File) {
 	ms := make([]Message, INSERT_BATCH_SIZE)
 	var m *Message
 	var i uint64
-	var ignoreLast bool
-
-	pool, _ := tunny.CreatePoolGeneric(POOL_SIZE).Open()
-	defer pool.Close()
-
 	table := r.Table(bmo.table)
 	insertOptions := r.InsertOpts{Durability: "soft"}
 
-	insert := func() {
-		j := i
-		if !ignoreLast {
-			j += 1
-		}
-		_, err = table.Insert(ms[:j], insertOptions).RunWrite(session)
+	pool := tunny.NewFunc(POOL_SIZE, func(data interface{}) interface{} {
+		// fmt.Fprintf(os.Stderr, "Writing: %s\n", data)
+
+		_, err = table.Insert(data, insertOptions).RunWrite(session)
 		if err != nil {
 			log.Fatal(err)
 			os.Exit(1)
 		}
-	}
+
+		return true
+	})
+	defer pool.Close()
 
 	for {
 		i = bmo.seq % INSERT_BATCH_SIZE
+		j := i
 		m = &ms[i]
 		err = decoder.Decode(&m)
 
 		switch {
 		case err == io.EOF:
-			ignoreLast = true
-			pool.SendWork(insert)
+			pool.Process(ms[:j])
 			return
 		case err != nil:
-			ignoreLast = true
-			pool.SendWork(insert)
+			pool.Process(ms[:j])
 			log.Fatal("Can't parse json input, \"", err, "\". Object #", bmo.seq, ", after ", m)
 			os.Exit(1)
 		default:
 			if i+1 == INSERT_BATCH_SIZE {
-				ignoreLast = false
-				pool.SendWork(insert)
+				j += 1
+				pool.Process(ms[:j])
 			}
 		}
 
